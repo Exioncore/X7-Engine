@@ -19,7 +19,8 @@ class ProcessData {
   const std::string& getPath();
 
   // Methods
-  int8_t setAffinity(DWORD_PTR affinity_mask);
+  int8_t setAffinity(uint64_t& affinity_mask);
+  int8_t getAffinity(uint64_t& affinity_mask);
 
  private:
   HANDLE handle;

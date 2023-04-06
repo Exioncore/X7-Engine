@@ -16,17 +16,17 @@
 
 #define DBG
 #ifdef DBG
-	#define LOG_RETURN_TYPE		TRL::LogResult
+	#define LOG_RETURN_TYPE						TRL::LogResult
 
-	#define	LOG_BEGIN					TRL::LogResult ldat = {0,0}
-	#define LOG_END						logger(ldat, 0, __func__, "")
+	#define	LOG_BEGIN									TRL::LogResult ldat = {0,0}
+	#define LOG_END										logger(ldat, 0, __func__, "")
 	#define LOG_END_EC(error_code)		logger(error_code, ldat.id, 0, __func__, "")
 
-	#define IS_LOG_OK			(ldat.error_code == TRL::Logger::OK)
-	#define GET_LOG_ERROR_CODE  ldat.error_code;
+	#define IS_LOG_OK									(ldat.error_code == TRL::Logger::OK)
+	#define GET_LOG_ERROR_CODE				ldat.error_code;
 
-	#define LOG_LR(log_result, text)		ldat = logger(log_result, ldat.id, __func__, text)
-	#define LOG_EC(error_code, text)		ldat = logger(error_code, ldat.id, 0, __func__, text)
+	#define LOG_LR(log_result, text)	ldat = logger(log_result, ldat.id, __func__, text)
+	#define LOG_EC(error_code, text)	ldat = logger(error_code, ldat.id, 0, __func__, text)
 #else
 	#define LOG_RETURN_TYPE		int32_t
 

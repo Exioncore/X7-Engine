@@ -17,7 +17,7 @@ ProcessMonitor::ProcessMonitor() {
   LOG_EC(CoInitialize(NULL), "CoInitialize()");
   if (IS_LOG_OK) {
     foreground_window_change_event_hook =
-        SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE, NULL,
+        SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, NULL,
                         ProcessMonitor::WinEventProcCallback, 0, 0,
                         WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     LOG_EC(foreground_window_change_event_hook == NULL, "SetWinEventHook()");
@@ -58,6 +58,10 @@ LOG_RETURN_TYPE ProcessMonitor::setForegroundProcessAffinity(
            "getProcessDataFromHandle()");
     if (IS_LOG_OK) {
       LOG_EC(process.setAffinity(affinity_mask), "setAffinity()");
+      if (IS_LOG_OK) {
+        LOG_INFO("Process " + process.getPath() + " affinity set to " +
+                 std::to_string(affinity_mask));
+      }
     }
     if (IS_LOG_OK && proc_affinity_map.count(process.getPath()) == 0) {
       proc_affinity_map.emplace(process.getPath(), affinity_mask);
@@ -102,10 +106,36 @@ VOID CALLBACK ProcessMonitor::WinEventProcCallback(HWINEVENTHOOK hWinEventHook,
                                                    LONG idObject, LONG idChild,
                                                    DWORD dwEventThread,
                                                    DWORD dwmsEventTime) {
-  if (dwEvent == EVENT_OBJECT_CREATE) {
+  if (dwEvent == EVENT_SYSTEM_FOREGROUND) {
+    LOG_BEGIN;
+
     ProcessData proc;
-    (void)ProcessMonitor::getInstance().getProcessDataFromHandle(hwnd, proc);
-    LOG_INFO("Process " + proc.getPath());
+    ProcessMonitor& proc_monitor = ProcessMonitor::getInstance();
+    LOG_LR(proc_monitor.getProcessDataFromHandle(hwnd, proc),
+           "Get process from handle");
+    if (IS_LOG_OK) {
+      // Check if we have an affinity mask expectation for the given process
+      const std::string& proc_path = proc.getPath();
+      if (proc_monitor.proc_affinity_map.count(proc_path) == 1) {
+        uint64_t expected_affinity_mask =
+            proc_monitor.proc_affinity_map.at(proc_path);
+        uint64_t curr_affinity_mask;
+        LOG_EC(proc.getAffinity(curr_affinity_mask), "Get Process Affinity");
+
+        // Set affinity mask only if it doesn't already match our preset
+        if (curr_affinity_mask != expected_affinity_mask) {
+          LOG_EC(proc.setAffinity(expected_affinity_mask),
+                 "Set Process Affinity");
+          if (IS_LOG_OK) {
+            LOG_INFO(
+                "Process " + proc_path + " affinity set to " +
+                std::to_string(proc_monitor.proc_affinity_map.at(proc_path)));
+          }
+        }
+      }
+    }
+
+    LOG_END;
   }
 }
 

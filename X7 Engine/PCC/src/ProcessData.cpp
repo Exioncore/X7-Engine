@@ -40,10 +40,13 @@ const std::string& ProcessData::getPath() { return path; }
 ///////////////
 //// Methods //
 ///////////////
-int8_t ProcessData::setAffinity(DWORD_PTR affinity_mask) {
-  std::cout << "Setting Process: " << path << " affinity mask to "
-            << affinity_mask << std::endl;
+int8_t ProcessData::setAffinity(uint64_t& affinity_mask) {
   return SetProcessAffinityMask(handle, affinity_mask) != 0 ? OK : 1;
+}
+
+int8_t ProcessData::getAffinity(uint64_t& affinity_mask) { 
+  uint64_t system_affinity;
+  return (GetProcessAffinityMask(handle, &affinity_mask, &system_affinity) == 0);
 }
 
 }  // namespace PCC
