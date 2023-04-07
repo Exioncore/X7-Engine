@@ -1,9 +1,15 @@
 #include "ProcessMonitor.h"
 // System Includes
+#include <filesystem>
 #include <format>
 #include <iostream>
 // 3rd Party Include
 #include <Psapi.h>
+
+#include "rapidjson/document.h"
+#include "rapidjson/filereadstream.h"
+#include "rapidjson/filewritestream.h"
+#include "rapidjson/writer.h"
 // Interal Module Includes
 // External Module Includes
 
@@ -23,6 +29,11 @@ ProcessMonitor::ProcessMonitor() {
     LOG_EC(foreground_window_change_event_hook == NULL, "SetWinEventHook()");
   } else {
     foreground_window_change_event_hook = NULL;
+  }
+
+  if (IS_LOG_OK) {
+    LOG_LR(loadProcAffinityMapFromDisk(),
+           "Load Process Affinity Map from Disk");
   }
 
   LOG_END;
@@ -65,6 +76,7 @@ LOG_RETURN_TYPE ProcessMonitor::setForegroundProcessAffinity(
     }
     if (IS_LOG_OK && proc_affinity_map.count(process.getPath()) == 0) {
       proc_affinity_map.emplace(process.getPath(), affinity_mask);
+      LOG_LR(saveProcAffinityMapToDisk(), "Save Process Affinity map to disk");
     }
   }
 
@@ -94,6 +106,78 @@ LOG_RETURN_TYPE ProcessMonitor::getProcessDataFromHandle(
       }
     }
   }
+
+  return LOG_END;
+}
+
+LOG_RETURN_TYPE ProcessMonitor::loadProcAffinityMapFromDisk() {
+  using namespace rapidjson;
+
+  LOG_BEGIN;
+
+  // Load JSON file from disk
+  std::string path = std::filesystem::current_path()
+                         .parent_path()
+                         .append("ProcessAffinityMap.json")
+                         .string();
+  FILE* fp = fopen(path.c_str(), "rb");
+  if (fp != NULL) {
+    char readBuffer[65536];
+    FileReadStream is(fp, readBuffer, sizeof(readBuffer));
+
+    Document document;
+    document.ParseStream(is);
+    fclose(fp);
+
+    // Read JSON file and populate proce_affinity_map
+    for (auto& entry : document["Programs"].GetArray()) {
+      std::string path = entry["path"].GetString();
+      uint64_t affinity = entry["affinity"].GetUint64();
+      proc_affinity_map.emplace(path, affinity);
+    }
+  }
+
+  return LOG_END;
+}
+
+LOG_RETURN_TYPE ProcessMonitor::saveProcAffinityMapToDisk() {
+  using namespace rapidjson;
+
+  LOG_BEGIN;
+
+  // Build JSON file
+  Document document;
+  document.SetObject();
+  Value array(rapidjson::kArrayType);
+
+  Document::AllocatorType& allocator = document.GetAllocator();
+  for (auto& [path, affinity] : proc_affinity_map) {
+    Value value(rapidjson::kObjectType);
+    {
+      {
+        Value path_txt;
+        path_txt.SetString(path.c_str(), allocator);
+        value.AddMember("path", path_txt, allocator);
+      }
+      value.AddMember("affinity", affinity, allocator);
+    }
+    array.PushBack(value, allocator);
+  }
+  document.AddMember("Programs", array, allocator);
+
+  // Write JSON file to disk
+  std::string path = std::filesystem::current_path()
+                         .parent_path()
+                         .append("ProcessAffinityMap.json")
+                         .string();
+  FILE* fp = fopen(path.c_str(), "wb");
+  char writeBuffer[65536];
+  FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
+
+  Writer<FileWriteStream> writer(os);
+  document.Accept(writer);
+
+  fclose(fp);
 
   return LOG_END;
 }

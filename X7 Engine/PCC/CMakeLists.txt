@@ -17,4 +17,5 @@ find_library(USER32 user32)
 target_link_libraries(PCC
 	USER32
 	TRL
+	RAPIDJSON
 )

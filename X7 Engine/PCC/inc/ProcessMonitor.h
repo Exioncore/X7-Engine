@@ -36,6 +36,9 @@ class ProcessMonitor {
   LOG_RETURN_TYPE getProcessDataFromHandle(HWND handle,
                                            ProcessData& out_process_data);
 
+  LOG_RETURN_TYPE loadProcAffinityMapFromDisk();
+  LOG_RETURN_TYPE saveProcAffinityMapToDisk();
+
   // Others
   static VOID CALLBACK WinEventProcCallback(HWINEVENTHOOK hWinEventHook,
                                             DWORD dwEvent, HWND hwnd,
