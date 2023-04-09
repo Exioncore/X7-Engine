@@ -9,6 +9,7 @@
 #include "GDM.h"
 #include "HotkeyManager.h"
 #include "ProcessMonitor.h"
+#include "COMmanager.h"
 
 using namespace std;
 
@@ -46,6 +47,9 @@ void resetAffinity() {
 }
 
 void message_handler() {
+  WMW::COMmanager com_manager;
+  com_manager.initialize();
+
   PCC::HotkeyManager::getInstance().addHotkey(MOD_ALT | MOD_CONTROL | MOD_SHIFT,
                                               VK_F1, setAffinityToCCD0);
   PCC::HotkeyManager::getInstance().addHotkey(MOD_ALT | MOD_CONTROL | MOD_SHIFT,
@@ -70,6 +74,8 @@ void message_handler() {
 int main() {
   std::thread t_msg_handler(message_handler);
 
+
+
   std::shared_ptr<MDI::SensorTree> root =
       std::make_shared<MDI::SensorTree>("X7 Engine");
   GDM::GDM gdm(root);
@@ -77,7 +83,7 @@ int main() {
 
   while (true) {
     gdm.update();
-    // printSensorsTree(root, 0);
+    //printSensorsTree(root, 0);
     _sleep(1000);
   }
   t_msg_handler.join();

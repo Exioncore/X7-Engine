@@ -40,13 +40,24 @@ const std::string& ProcessData::getPath() { return path; }
 ///////////////
 //// Methods //
 ///////////////
-int8_t ProcessData::setAffinity(uint64_t& affinity_mask) {
-  return SetProcessAffinityMask(handle, affinity_mask) != 0 ? OK : 1;
+int16_t ProcessData::setAffinity(uint64_t& affinity_mask) {
+  int16_t error_code = OK;
+  bool result = SetProcessAffinityMask(handle, affinity_mask);
+  if (!result) {
+    error_code = GetLastError();
+  }
+  return error_code;
 }
 
-int8_t ProcessData::getAffinity(uint64_t& affinity_mask) { 
+int16_t ProcessData::getAffinity(uint64_t& affinity_mask) {
+  int16_t error_code = OK;
   uint64_t system_affinity;
-  return (GetProcessAffinityMask(handle, &affinity_mask, &system_affinity) == 0);
+  bool result =
+      GetProcessAffinityMask(handle, &affinity_mask, &system_affinity);
+  if (!result) {
+    error_code = GetLastError();
+  }
+  return error_code;
 }
 
 }  // namespace PCC

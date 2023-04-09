@@ -10,6 +10,7 @@
 #include "ProcessData.h"
 // External Module
 #include "EasyLogger.h"
+#include "WMIwatcher.h"
 
 namespace PCC {
 class ProcessMonitor {
@@ -26,6 +27,10 @@ class ProcessMonitor {
 
   ProcessData foreground_process;
   HWINEVENTHOOK foreground_window_change_event_hook;
+
+  std::unordered_map<uint32_t, std::string> live_processes;
+  uint16_t new_process_begin_callback_id, new_process_end_callback_id;
+
   std::mutex mtx;
   std::unordered_map<std::string, uint64_t> proc_affinity_map;
 
@@ -40,6 +45,9 @@ class ProcessMonitor {
   LOG_RETURN_TYPE saveProcAffinityMapToDisk();
 
   // Others
+  void newProcessBegin(IWbemClassObject* data);
+  void newProcessEnd(IWbemClassObject* data);
+
   static VOID CALLBACK WinEventProcCallback(HWINEVENTHOOK hWinEventHook,
                                             DWORD dwEvent, HWND hwnd,
                                             LONG idObject, LONG idChild,

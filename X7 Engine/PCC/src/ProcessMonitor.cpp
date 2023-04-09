@@ -1,5 +1,6 @@
 #include "ProcessMonitor.h"
 // System Includes
+#include <codecvt>
 #include <filesystem>
 #include <format>
 #include <iostream>
@@ -20,20 +21,38 @@ namespace PCC {
 ProcessMonitor::ProcessMonitor() {
   LOG_BEGIN;
 
-  LOG_EC(CoInitialize(NULL), "CoInitialize()");
-  if (IS_LOG_OK) {
-    foreground_window_change_event_hook =
-        SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, NULL,
-                        ProcessMonitor::WinEventProcCallback, 0, 0,
-                        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-    LOG_EC(foreground_window_change_event_hook == NULL, "SetWinEventHook()");
-  } else {
-    foreground_window_change_event_hook = NULL;
-  }
+  foreground_window_change_event_hook =
+      SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, NULL,
+                      ProcessMonitor::WinEventProcCallback, 0, 0,
+                      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+  LOG_EC(foreground_window_change_event_hook == NULL, "SetWinEventHook()");
 
   if (IS_LOG_OK) {
     LOG_LR(loadProcAffinityMapFromDisk(),
            "Load Process Affinity Map from Disk");
+  }
+
+  if (IS_LOG_OK) {
+    auto& wmi_watcher = WMW::WMIwatcher::getInstance();
+    LOG_LR(wmi_watcher.initialize(), "WMI Initialization");
+    if (IS_LOG_OK) {
+      LOG_LR(wmi_watcher.registerCallback(
+                 new_process_begin_callback_id,
+                 "SELECT * FROM __InstanceCreationEvent WITHIN 1 WHERE "
+                 "TargetInstance ISA 'Win32_Process'",
+                 std::bind(&ProcessMonitor::newProcessBegin, this,
+                           std::placeholders::_1)),
+             "Register New Process callback");
+    }
+    if (IS_LOG_OK) {
+      LOG_LR(wmi_watcher.registerCallback(
+                 new_process_end_callback_id,
+                 "SELECT * FROM __InstanceDeletionEvent WITHIN 1 WHERE "
+                 "TargetInstance ISA 'Win32_Process'",
+                 std::bind(&ProcessMonitor::newProcessEnd, this,
+                           std::placeholders::_1)),
+             "Register End Process callback");
+    }
   }
 
   LOG_END;
@@ -44,7 +63,6 @@ ProcessMonitor::~ProcessMonitor() {
 
   LOG_EC(UnhookWinEvent(foreground_window_change_event_hook) == TRUE,
          "UnhookWinEvent()");
-  CoUninitialize();
 
   LOG_END;
 }
@@ -185,6 +203,79 @@ LOG_RETURN_TYPE ProcessMonitor::saveProcAffinityMapToDisk() {
 ///////////////
 //// Others  //
 ///////////////
+void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
+  LOG_BEGIN;
+
+  _variant_t target_instance_v;
+  LOG_EC(
+      data->Get(_bstr_t(L"TargetInstance"), 0, &target_instance_v, NULL, NULL),
+      "Get TargetInstance");
+  if (IS_LOG_OK) {
+    IUnknown* target_instance = target_instance_v;
+    LOG_EC(target_instance->QueryInterface(IID_IWbemClassObject,
+                                           reinterpret_cast<void**>(&data)),
+           "Query TargetInstance interface");
+    if (IS_LOG_OK) {
+      variant_t value;
+      LOG_EC(data->Get(L"Name", 0, &value, NULL, NULL), "Get Process Name");
+
+      std::string proc_name;
+      if (IS_LOG_OK) {
+        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+        proc_name = conv.to_bytes(value.bstrVal);
+      }
+      VariantClear(&value);
+
+      if (IS_LOG_OK) {
+        uint32_t proc_id;
+        LOG_EC(data->Get(L"ProcessId", 0, &value, NULL, NULL),
+               "Get Process ID");
+        if (IS_LOG_OK) {
+          proc_id = value.uintVal;
+          live_processes.emplace(proc_id, proc_name);
+          LOG_INFO(std::to_string(proc_id) + " " + proc_name);
+        }
+        VariantClear(&value);
+      }
+    }
+  }
+
+  VariantClear(&target_instance_v);
+
+  LOG_END;
+}
+
+void ProcessMonitor::newProcessEnd(IWbemClassObject* data) {
+  LOG_BEGIN;
+
+  _variant_t target_instance_v;
+  LOG_EC(
+      data->Get(_bstr_t(L"TargetInstance"), 0, &target_instance_v, NULL, NULL),
+      "Get TargetInstance");
+  if (IS_LOG_OK) {
+    IUnknown* target_instance = target_instance_v;
+    LOG_EC(target_instance->QueryInterface(IID_IWbemClassObject,
+                                           reinterpret_cast<void**>(&data)),
+           "Query TargetInstance interface");
+    if (IS_LOG_OK) {
+      variant_t value;
+
+      uint32_t proc_id;
+      LOG_EC(data->Get(L"ProcessId", 0, &value, NULL, NULL), "Get Process ID");
+      if (IS_LOG_OK) {
+        proc_id = value.uintVal;
+        (void)live_processes.erase(proc_id);
+        LOG_INFO(std::to_string(proc_id));
+      }
+      VariantClear(&value);
+    }
+  }
+
+  VariantClear(&target_instance_v);
+
+  LOG_END;
+}
+
 VOID CALLBACK ProcessMonitor::WinEventProcCallback(HWINEVENTHOOK hWinEventHook,
                                                    DWORD dwEvent, HWND hwnd,
                                                    LONG idObject, LONG idChild,

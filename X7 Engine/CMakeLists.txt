@@ -10,6 +10,7 @@ target_link_libraries(X7_Engine
     GDM
     MDI
     PCC
+    WMW
     USER32
 )
 
@@ -23,5 +24,6 @@ add_subdirectory(MDI)
 add_subdirectory(PCC)
 add_subdirectory(SDKs)
 add_subdirectory(TRL)
+add_subdirectory(WMW)
 
 # TODO: Add tests and install targets if needed.

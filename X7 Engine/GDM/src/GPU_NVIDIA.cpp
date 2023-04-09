@@ -112,19 +112,23 @@ LOG_RETURN_TYPE GPU_NVIDIA::update() {
 
     /* NVML*/
     unsigned int value;
-    LOG_EC(nvmlDeviceGetPowerUsage(gpu.nvml_handle, &value),
-           "Retrieve GPU Power Usage");
-    if (IS_LOG_OK)
-      gpu.power->setValue(value / 1000);
-    else
-      error_code = LOG_NOK;
+    if (gpu.fan_speed != NULL) {
+      LOG_EC(nvmlDeviceGetFanSpeed(gpu.nvml_handle, &value),
+             "Retrieve GPU Fan Speed");
+      if (IS_LOG_OK)
+        gpu.fan_speed->setValue(value);
+      else
+        error_code = LOG_NOK;
+    }
 
-    LOG_EC(nvmlDeviceGetFanSpeed(gpu.nvml_handle, &value),
-           "Retrieve GPU Fan Speed");
-    if (IS_LOG_OK)
-      gpu.fan_speed->setValue(value);
-    else
-      error_code = LOG_NOK;
+    if (gpu.power != NULL) {
+      LOG_EC(nvmlDeviceGetPowerUsage(gpu.nvml_handle, &value),
+             "Retrieve GPU Power Usage");
+      if (IS_LOG_OK)
+        gpu.power->setValue(value / 1000);
+      else
+        error_code = LOG_NOK;
+    }
   }
 
   return LOG_END_EC(error_code);
@@ -138,6 +142,7 @@ LOG_RETURN_TYPE GPU_NVIDIA::initializeGPUHandle(GPUHandle& gpu,
   LOG_EC(NvAPI_GPU_GetFullName(gpu.nvapi_handle, name), "Get Device name");
 
   if (IS_LOG_OK) {
+    // NVAPI related
     gpu.root_sensor_tree = std::make_shared<MDI::SensorTree>(std::string(name));
     gpu.temperature = std::make_shared<MDI::Sensor>(
         "Temperature", MDI::Sensor::TEMPERATURE, "°C");
@@ -157,11 +162,28 @@ LOG_RETURN_TYPE GPU_NVIDIA::initializeGPUHandle(GPUHandle& gpu,
     gpu.vram_clock = std::make_shared<MDI::Sensor>(
         "VRAM Clock", MDI::Sensor::FREQUENCY, "MHZ");
     gpu.root_sensor_tree->addSensor(gpu.vram_clock);
-    gpu.fan_speed = std::make_shared<MDI::Sensor>(
-        "Fan Speed", MDI::Sensor::ROTATIONAL_SPEED, "%");
-    gpu.root_sensor_tree->addSensor(gpu.fan_speed);
-    gpu.power = std::make_shared<MDI::Sensor>("Power", MDI::Sensor::POWER, "W");
-    gpu.root_sensor_tree->addSensor(gpu.power);
+
+    // NVML related
+    unsigned int value;
+    nvmlReturn_t result;
+    //// Fan Speed
+    result = nvmlDeviceGetFanSpeed(gpu.nvml_handle, &value);
+    if (result == NVML_SUCCESS) {
+      gpu.fan_speed = std::make_shared<MDI::Sensor>(
+          "Fan Speed", MDI::Sensor::ROTATIONAL_SPEED, "%");
+      gpu.root_sensor_tree->addSensor(gpu.fan_speed);
+    } else if (result != NVML_ERROR_NOT_SUPPORTED) {
+      LOG_EC(result, "Failed Checking for Fan Speed metric support");
+    }
+    //// Power Usage
+    result = nvmlDeviceGetPowerUsage(gpu.nvml_handle, &value);
+    if (result == NVML_SUCCESS) {
+      gpu.power =
+          std::make_shared<MDI::Sensor>("Power", MDI::Sensor::POWER, "W");
+      gpu.root_sensor_tree->addSensor(gpu.power);
+    } else if (result != NVML_ERROR_NOT_SUPPORTED) {
+      LOG_EC(result, "Failed Checking for Power Usage metric support");
+    }
     LOG_INFO(std::format("GPU {0} named {1} initialized", index,
                          gpu.root_sensor_tree->getName()));
   }
