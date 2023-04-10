@@ -7,7 +7,6 @@
 // 3rd Party Include
 #include <windows.h>
 // Interal Module Includes
-#include "ProcessData.h"
 // External Module
 #include "EasyLogger.h"
 #include "WMIwatcher.h"
@@ -19,15 +18,16 @@ class ProcessMonitor {
   ProcessMonitor& operator=(const ProcessMonitor&) = delete;
 
   // Methods
-  static ProcessMonitor& getInstance();
+  LOG_RETURN_TYPE initialize();
+  LOG_RETURN_TYPE deInitialize();
   LOG_RETURN_TYPE setForegroundProcessAffinity(uint64_t affinity_mask);
+
+  static ProcessMonitor& getInstance();
 
  private:
   LOGGER("ProcessMonitor", true, true);
 
-  ProcessData foreground_process;
-  HWINEVENTHOOK foreground_window_change_event_hook;
-
+  bool initialized;
   std::unordered_map<uint32_t, std::string> live_processes;
   uint16_t new_process_begin_callback_id, new_process_end_callback_id;
 
@@ -38,8 +38,7 @@ class ProcessMonitor {
   ~ProcessMonitor();
 
   // Methods
-  LOG_RETURN_TYPE getProcessDataFromHandle(HWND handle,
-                                           ProcessData& out_process_data);
+  LOG_RETURN_TYPE setProcessAffinity(uint32_t pid, uint64_t affinity_mask);
 
   LOG_RETURN_TYPE loadProcAffinityMapFromDisk();
   LOG_RETURN_TYPE saveProcAffinityMapToDisk();
@@ -47,12 +46,6 @@ class ProcessMonitor {
   // Others
   void newProcessBegin(IWbemClassObject* data);
   void newProcessEnd(IWbemClassObject* data);
-
-  static VOID CALLBACK WinEventProcCallback(HWINEVENTHOOK hWinEventHook,
-                                            DWORD dwEvent, HWND hwnd,
-                                            LONG idObject, LONG idChild,
-                                            DWORD dwEventThread,
-                                            DWORD dwmsEventTime);
 };
 
 }  // namespace PCC

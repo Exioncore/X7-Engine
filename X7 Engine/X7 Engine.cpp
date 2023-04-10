@@ -6,10 +6,10 @@
 #include <windows.h>
 // Interal Module Includes
 // External Module Includes
+#include "COMmanager.h"
 #include "GDM.h"
 #include "HotkeyManager.h"
 #include "ProcessMonitor.h"
-#include "COMmanager.h"
 
 using namespace std;
 
@@ -34,16 +34,28 @@ void setAffinityToCCD0() {
       0b1111111111111111);
 }
 
+void setAffinityToCCD0_SMTOff() {
+  std::cout << "setAffinityToCCD0_SMTOff()" << std::endl;
+  PCC::ProcessMonitor::getInstance().setForegroundProcessAffinity(
+      0b0101010101010101);
+}
+
 void setAffinityToCCD1() {
   std::cout << "setAffinityToCCD1()" << std::endl;
   PCC::ProcessMonitor::getInstance().setForegroundProcessAffinity(
       (static_cast<uint64_t>(0b1111111111111111) << 16));
 }
 
+void setAffinityToCCD1_SMTOff() {
+  std::cout << "setAffinityToCCD1()_SMTOff()" << std::endl;
+  PCC::ProcessMonitor::getInstance().setForegroundProcessAffinity(
+      (static_cast<uint64_t>(0b0101010101010101) << 16));
+}
+
 void resetAffinity() {
   std::cout << "resetAffinity()" << std::endl;
-  PCC::ProcessMonitor::getInstance().setForegroundProcessAffinity(4294967296 -
-                                                                  1);
+  PCC::ProcessMonitor::getInstance().setForegroundProcessAffinity(
+      0b11111111111111111111111111111111);
 }
 
 void message_handler() {
@@ -53,11 +65,15 @@ void message_handler() {
   PCC::HotkeyManager::getInstance().addHotkey(MOD_ALT | MOD_CONTROL | MOD_SHIFT,
                                               VK_F1, setAffinityToCCD0);
   PCC::HotkeyManager::getInstance().addHotkey(MOD_ALT | MOD_CONTROL | MOD_SHIFT,
-                                              VK_F2, setAffinityToCCD1);
+                                              VK_F2, setAffinityToCCD0_SMTOff);
   PCC::HotkeyManager::getInstance().addHotkey(MOD_ALT | MOD_CONTROL | MOD_SHIFT,
-                                              VK_F3, resetAffinity);
+                                              VK_F3, setAffinityToCCD1);
+  PCC::HotkeyManager::getInstance().addHotkey(MOD_ALT | MOD_CONTROL | MOD_SHIFT,
+                                              VK_F4, setAffinityToCCD1_SMTOff);
+  PCC::HotkeyManager::getInstance().addHotkey(MOD_ALT | MOD_CONTROL | MOD_SHIFT,
+                                              VK_F5, resetAffinity);
 
-  (void)PCC::ProcessMonitor::getInstance();
+  (void)PCC::ProcessMonitor::getInstance().initialize();
   MSG msg;
 
   while (GetMessage(&msg, NULL, 0, 0) != -1) {
@@ -74,8 +90,6 @@ void message_handler() {
 int main() {
   std::thread t_msg_handler(message_handler);
 
-
-
   std::shared_ptr<MDI::SensorTree> root =
       std::make_shared<MDI::SensorTree>("X7 Engine");
   GDM::GDM gdm(root);
@@ -83,7 +97,7 @@ int main() {
 
   while (true) {
     gdm.update();
-    //printSensorsTree(root, 0);
+    // printSensorsTree(root, 0);
     _sleep(1000);
   }
   t_msg_handler.join();

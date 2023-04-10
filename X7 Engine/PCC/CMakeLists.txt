@@ -4,8 +4,6 @@ project("X7 Engine")
 add_library(PCC
 	"src/ProcessMonitor.cpp"
 	"inc/ProcessMonitor.h"
-	"inc/ProcessData.h"
-	"src/ProcessData.cpp"
 	"inc/HotkeyManager.h"
 	"src/HotkeyManager.cpp"
 )

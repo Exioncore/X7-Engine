@@ -18,21 +18,23 @@ namespace PCC {
 //////////////////////////
 // ProcessMonitor Class //
 //////////////////////////
-ProcessMonitor::ProcessMonitor() {
+ProcessMonitor::ProcessMonitor() : initialized(false) {}
+
+ProcessMonitor::~ProcessMonitor() { (void)deInitialize(); }
+
+///////////////
+//// Methods //
+///////////////
+ProcessMonitor& ProcessMonitor::getInstance() {
+  static ProcessMonitor instance;
+  return instance;
+}
+
+LOG_RETURN_TYPE ProcessMonitor::initialize() {
   LOG_BEGIN;
 
-  foreground_window_change_event_hook =
-      SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, NULL,
-                      ProcessMonitor::WinEventProcCallback, 0, 0,
-                      WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-  LOG_EC(foreground_window_change_event_hook == NULL, "SetWinEventHook()");
-
-  if (IS_LOG_OK) {
-    LOG_LR(loadProcAffinityMapFromDisk(),
-           "Load Process Affinity Map from Disk");
-  }
-
-  if (IS_LOG_OK) {
+  // Register WMI callbacks
+  if (!initialized) {
     auto& wmi_watcher = WMW::WMIwatcher::getInstance();
     LOG_LR(wmi_watcher.initialize(), "WMI Initialization");
     if (IS_LOG_OK) {
@@ -53,26 +55,34 @@ ProcessMonitor::ProcessMonitor() {
                            std::placeholders::_1)),
              "Register End Process callback");
     }
+    // Load process affinity map from storage
+    if (IS_LOG_OK) {
+      LOG_LR(loadProcAffinityMapFromDisk(),
+             "Load Process Affinity Map from Disk");
+    }
+    initialized = IS_LOG_OK;
   }
 
-  LOG_END;
+  return LOG_END;
 }
 
-ProcessMonitor::~ProcessMonitor() {
+LOG_RETURN_TYPE ProcessMonitor::deInitialize() {
   LOG_BEGIN;
-
-  LOG_EC(UnhookWinEvent(foreground_window_change_event_hook) == TRUE,
-         "UnhookWinEvent()");
-
-  LOG_END;
-}
-
-///////////////
-//// Methods //
-///////////////
-ProcessMonitor& ProcessMonitor::getInstance() {
-  static ProcessMonitor instance;
-  return instance;
+  // Unhook wmi callbacks
+  auto& wmi_watcher = WMW::WMIwatcher::getInstance();
+  if (new_process_begin_callback_id != 0) {
+    LOG_LR(wmi_watcher.deRegisterCallback(new_process_begin_callback_id),
+           "De-register New Process callback");
+    new_process_begin_callback_id = 0;
+  }
+  if (new_process_end_callback_id != 0) {
+    LOG_LR(wmi_watcher.deRegisterCallback(new_process_end_callback_id),
+           "De-register End Process callback");
+    new_process_end_callback_id = 0;
+  }
+  // Save process affinity map to storage
+  LOG_LR(saveProcAffinityMapToDisk(), "Save Process Affinity Map to Disk");
+  return LOG_END;
 }
 
 LOG_RETURN_TYPE ProcessMonitor::setForegroundProcessAffinity(
@@ -80,49 +90,71 @@ LOG_RETURN_TYPE ProcessMonitor::setForegroundProcessAffinity(
   LOG_BEGIN;
 
   HWND handle = GetForegroundWindow();
-  LOG_EC(handle == NULL, "GetForegroundWindow()");
+  LOG_EC(handle == NULL ? LOG_NOK : LOG_OK, "GetForegroundWindow()");
   if (IS_LOG_OK) {
-    ProcessData process;
-    LOG_LR(getProcessDataFromHandle(handle, process),
-           "getProcessDataFromHandle()");
+    // Get Process ID
+    DWORD pid;
+    LOG_EC(GetWindowThreadProcessId(handle, &pid) == 0,
+           "GetWindowThreadProcessId()");
     if (IS_LOG_OK) {
-      LOG_EC(process.setAffinity(affinity_mask), "setAffinity()");
+      // Check if we have a record of this process id
+      LOG_EC(live_processes.count(pid) == 1 ? LOG_OK : LOG_NOK,
+             "Check if process is tracked");
+      // Get Process Name
       if (IS_LOG_OK) {
-        LOG_INFO("Process " + process.getPath() + " affinity set to " +
-                 std::to_string(affinity_mask));
+        std::string proc_name = live_processes.at(pid);
+        // Store Process profile
+        (void)proc_affinity_map.erase(proc_name);
+        proc_affinity_map.emplace(proc_name, affinity_mask);
+        LOG_LR(saveProcAffinityMapToDisk(),
+                "Save Process Affinity map to disk");
+        // Set affinity for all processes with the same name
+        if (IS_LOG_OK) {
+          for (auto& [pid, pid_to_name] : live_processes) {
+            if (pid_to_name == proc_name) {
+              // Set Process Affinity
+              LOG_LR(setProcessAffinity(pid, affinity_mask),
+                     "Set Process Affinity");
+            }
+          }
+        }
       }
-    }
-    if (IS_LOG_OK && proc_affinity_map.count(process.getPath()) == 0) {
-      proc_affinity_map.emplace(process.getPath(), affinity_mask);
-      LOG_LR(saveProcAffinityMapToDisk(), "Save Process Affinity map to disk");
     }
   }
 
   return LOG_END;
 }
 
-LOG_RETURN_TYPE ProcessMonitor::getProcessDataFromHandle(
-    HWND handle, ProcessData& out_process_data) {
+LOG_RETURN_TYPE ProcessMonitor::setProcessAffinity(uint32_t pid,
+                                                   uint64_t affinity_mask) {
   LOG_BEGIN;
 
-  // Get Process ID
-  DWORD dwProcessID;
-  LOG_EC(GetWindowThreadProcessId(handle, &dwProcessID) == 0,
-         "GetWindowThreadProcessId()");
-
+  HANDLE handle = OpenProcess(
+      PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_SET_INFORMATION,
+      FALSE, pid);
+  LOG_EC(handle == NULL ? LOG_NOK : LOG_OK, "OpenProcess()");
   if (IS_LOG_OK) {
-    HANDLE hProc = OpenProcess(
-        PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_SET_INFORMATION,
-        FALSE, dwProcessID);
-    LOG_EC(hProc == NULL, "OpenProcess()");
+    bool result;
+    // Retrieve current process affinity mask
+    uint64_t proc_affinity, system_affinity;
+    result = GetProcessAffinityMask(handle, &proc_affinity, &system_affinity);
+    LOG_EC(result ? LOG_OK : LOG_NOK, "GetProcessAffinityMask");
+    // Apply new affinity mask only if it does not already match what we want
     if (IS_LOG_OK) {
-      TCHAR filename[MAX_PATH] = {0};
-      LOG_EC(GetModuleFileNameEx(hProc, NULL, filename, MAX_PATH) == 0,
-             "GetModuleFileNameEx()");
-      if (IS_LOG_OK) {
-        out_process_data.set(hProc, std::string(filename));
+      if (proc_affinity != affinity_mask) {
+        result = SetProcessAffinityMask(handle, affinity_mask);
+        LOG_EC(result ? LOG_OK : LOG_NOK, "SetProcessAffinityMask");
+        if (IS_LOG_OK) {
+          (void)SetPriorityClass(handle, HIGH_PRIORITY_CLASS);
+          LOG_INFO("Affinity of process with ID " + std::to_string(pid) +
+                   " set to " + std::to_string(affinity_mask));
+        }
+      } else {
+        LOG_INFO("Affinity of process with ID " + std::to_string(pid) +
+                 " already set to " + std::to_string(affinity_mask));
       }
     }
+    (void)CloseHandle(handle);
   }
 
   return LOG_END;
@@ -206,6 +238,7 @@ LOG_RETURN_TYPE ProcessMonitor::saveProcAffinityMapToDisk() {
 void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
   LOG_BEGIN;
 
+  // Get TargetInstance which is an object of type Win32_Process
   _variant_t target_instance_v;
   LOG_EC(
       data->Get(_bstr_t(L"TargetInstance"), 0, &target_instance_v, NULL, NULL),
@@ -216,9 +249,9 @@ void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
                                            reinterpret_cast<void**>(&data)),
            "Query TargetInstance interface");
     if (IS_LOG_OK) {
+      // Get Process Name
       variant_t value;
       LOG_EC(data->Get(L"Name", 0, &value, NULL, NULL), "Get Process Name");
-
       std::string proc_name;
       if (IS_LOG_OK) {
         std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
@@ -227,6 +260,7 @@ void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
       VariantClear(&value);
 
       if (IS_LOG_OK) {
+        // Get Process ID
         uint32_t proc_id;
         LOG_EC(data->Get(L"ProcessId", 0, &value, NULL, NULL),
                "Get Process ID");
@@ -236,6 +270,13 @@ void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
           LOG_INFO(std::to_string(proc_id) + " " + proc_name);
         }
         VariantClear(&value);
+
+        // Apply affinity mask if there is a profile for the given process
+        if (IS_LOG_OK) {
+          if (proc_affinity_map.count(proc_name) == 1) {
+            setProcessAffinity(proc_id, proc_affinity_map.at(proc_name));
+          }
+        }
       }
     }
   }
@@ -274,44 +315,6 @@ void ProcessMonitor::newProcessEnd(IWbemClassObject* data) {
   VariantClear(&target_instance_v);
 
   LOG_END;
-}
-
-VOID CALLBACK ProcessMonitor::WinEventProcCallback(HWINEVENTHOOK hWinEventHook,
-                                                   DWORD dwEvent, HWND hwnd,
-                                                   LONG idObject, LONG idChild,
-                                                   DWORD dwEventThread,
-                                                   DWORD dwmsEventTime) {
-  if (dwEvent == EVENT_SYSTEM_FOREGROUND) {
-    LOG_BEGIN;
-
-    ProcessData proc;
-    ProcessMonitor& proc_monitor = ProcessMonitor::getInstance();
-    LOG_LR(proc_monitor.getProcessDataFromHandle(hwnd, proc),
-           "Get process from handle");
-    if (IS_LOG_OK) {
-      // Check if we have an affinity mask expectation for the given process
-      const std::string& proc_path = proc.getPath();
-      if (proc_monitor.proc_affinity_map.count(proc_path) == 1) {
-        uint64_t expected_affinity_mask =
-            proc_monitor.proc_affinity_map.at(proc_path);
-        uint64_t curr_affinity_mask;
-        LOG_EC(proc.getAffinity(curr_affinity_mask), "Get Process Affinity");
-
-        // Set affinity mask only if it doesn't already match our preset
-        if (curr_affinity_mask != expected_affinity_mask) {
-          LOG_EC(proc.setAffinity(expected_affinity_mask),
-                 "Set Process Affinity");
-          if (IS_LOG_OK) {
-            LOG_INFO(
-                "Process " + proc_path + " affinity set to " +
-                std::to_string(proc_monitor.proc_affinity_map.at(proc_path)));
-          }
-        }
-      }
-    }
-
-    LOG_END;
-  }
 }
 
 }  // namespace PCC
