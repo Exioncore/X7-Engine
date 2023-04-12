@@ -12,10 +12,16 @@
 
 namespace WMW {
 class EventSink : public IWbemObjectSink {
+  LONG m_lRef;
+  bool bDone;
+  std::function<void(IWbemClassObject*)> callback;
+
  public:
   CComPtr<IWbemObjectSink> pStubSink;
 
   EventSink(std::function<void(IWbemClassObject*)> callback);
+
+  ~EventSink();
 
   virtual ULONG STDMETHODCALLTYPE AddRef();
 
@@ -31,10 +37,6 @@ class EventSink : public IWbemObjectSink {
       /* [in] */ HRESULT hResult,
       /* [in] */ BSTR strParam,
       /* [in] */ IWbemClassObject __RPC_FAR* pObjParam);
-
- private:
-  LONG m_lRef;
-  std::function<void(IWbemClassObject*)> callback;
 };
 
 }  // namespace WMW

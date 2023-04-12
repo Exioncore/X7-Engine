@@ -11,6 +11,8 @@ EventSink::EventSink(std::function<void(IWbemClassObject*)> callback) {
   this->callback = callback;
 }
 
+EventSink::~EventSink() { bDone = true; }
+
 ULONG EventSink::AddRef() { return InterlockedIncrement(&m_lRef); }
 
 ULONG EventSink::Release() {

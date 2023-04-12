@@ -107,7 +107,7 @@ LOG_RETURN_TYPE ProcessMonitor::setForegroundProcessAffinity(
         (void)proc_affinity_map.erase(proc_name);
         proc_affinity_map.emplace(proc_name, affinity_mask);
         LOG_LR(saveProcAffinityMapToDisk(),
-                "Save Process Affinity map to disk");
+               "Save Process Affinity map to disk");
         // Set affinity for all processes with the same name
         if (IS_LOG_OK) {
           for (auto& [pid, pid_to_name] : live_processes) {
@@ -240,9 +240,8 @@ void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
 
   // Get TargetInstance which is an object of type Win32_Process
   _variant_t target_instance_v;
-  LOG_EC(
-      data->Get(_bstr_t(L"TargetInstance"), 0, &target_instance_v, NULL, NULL),
-      "Get TargetInstance");
+  LOG_EC(data->Get(L"TargetInstance", 0, &target_instance_v, NULL, NULL),
+         "Get TargetInstance");
   if (IS_LOG_OK) {
     IUnknown* target_instance = target_instance_v;
     LOG_EC(target_instance->QueryInterface(IID_IWbemClassObject,
@@ -254,10 +253,16 @@ void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
       LOG_EC(data->Get(L"Name", 0, &value, NULL, NULL), "Get Process Name");
       std::string proc_name;
       if (IS_LOG_OK) {
-        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
-        proc_name = conv.to_bytes(value.bstrVal);
+        // UTF16 to UTF8
+        int len = SysStringLen(value.bstrVal);
+        int utf8_size = WideCharToMultiByte(CP_UTF8, 0, value.bstrVal, len,
+                                            NULL, 0, NULL, NULL);
+        proc_name = std::string(utf8_size, '\0');
+        (void)WideCharToMultiByte(CP_UTF8, 0, value.bstrVal, len,
+                                  proc_name.data(), proc_name.size(), NULL,
+                                  NULL);
       }
-      VariantClear(&value);
+      value.Clear();
 
       if (IS_LOG_OK) {
         // Get Process ID
@@ -269,7 +274,7 @@ void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
           live_processes.emplace(proc_id, proc_name);
           LOG_INFO(std::to_string(proc_id) + " " + proc_name);
         }
-        VariantClear(&value);
+        value.Clear();
 
         // Apply affinity mask if there is a profile for the given process
         if (IS_LOG_OK) {
@@ -279,9 +284,11 @@ void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
         }
       }
     }
+    (void)target_instance->Release();
   }
 
-  VariantClear(&target_instance_v);
+  target_instance_v.Clear();
+  (void)data->Release();
 
   LOG_END;
 }
@@ -290,9 +297,8 @@ void ProcessMonitor::newProcessEnd(IWbemClassObject* data) {
   LOG_BEGIN;
 
   _variant_t target_instance_v;
-  LOG_EC(
-      data->Get(_bstr_t(L"TargetInstance"), 0, &target_instance_v, NULL, NULL),
-      "Get TargetInstance");
+  LOG_EC(data->Get(L"TargetInstance", 0, &target_instance_v, NULL, NULL),
+         "Get TargetInstance");
   if (IS_LOG_OK) {
     IUnknown* target_instance = target_instance_v;
     LOG_EC(target_instance->QueryInterface(IID_IWbemClassObject,
@@ -308,11 +314,14 @@ void ProcessMonitor::newProcessEnd(IWbemClassObject* data) {
         (void)live_processes.erase(proc_id);
         LOG_INFO(std::to_string(proc_id));
       }
-      VariantClear(&value);
+
+      value.Clear();
     }
+    (void)target_instance->Release();
   }
 
-  VariantClear(&target_instance_v);
+  target_instance_v.Clear();
+  (void)data->Release();
 
   LOG_END;
 }
