@@ -55,11 +55,23 @@ LOG_RETURN_TYPE ProcessMonitor::initialize() {
                            std::placeholders::_1)),
              "Register End Process callback");
     }
+    // Retrieve all currently running processes
+    if (IS_LOG_OK) {
+      LOG_LR(getAllRunningProcesses(), "Get all running processes");
+    }
     // Load process affinity map from storage
     if (IS_LOG_OK) {
       LOG_LR(loadProcAffinityMapFromDisk(),
              "Load Process Affinity Map from Disk");
     }
+    // Check if we already have any running processes who have a profile
+    // associated
+    for (auto& [pid, name] : live_processes) {
+      if (proc_affinity_map.count(name) == 1) {
+        (void)setProcessAffinity(pid, proc_affinity_map.at(name));
+      }
+    }
+
     initialized = IS_LOG_OK;
   }
 
@@ -80,8 +92,6 @@ LOG_RETURN_TYPE ProcessMonitor::deInitialize() {
            "De-register End Process callback");
     new_process_end_callback_id = 0;
   }
-  // Save process affinity map to storage
-  LOG_LR(saveProcAffinityMapToDisk(), "Save Process Affinity Map to Disk");
   return LOG_END;
 }
 
@@ -125,6 +135,41 @@ LOG_RETURN_TYPE ProcessMonitor::setForegroundProcessAffinity(
   return LOG_END;
 }
 
+LOG_RETURN_TYPE ProcessMonitor::getAllRunningProcesses() {
+  LOG_BEGIN;
+
+  DWORD pids[1024], processes_count;
+  LOG_EC(EnumProcesses(pids, sizeof(pids), &processes_count) != 0
+             ? LOG_OK
+             : GetLastError(),
+         "Enumerate Processes");
+
+  // Here we do not log errors as otherwise we will get errors for every process
+  // that requires administrative rights to be "queried" for its name
+  if (IS_LOG_OK) {
+    // Clear out current list of running processes
+    live_processes.clear();
+    // Retrieve name of each process pid
+    processes_count /= sizeof(DWORD);
+    for (uint16_t i = 0; i < processes_count; i++) {
+      HANDLE handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
+                                  FALSE, pids[i]);
+      // If the handle is NULL (Process that requires administrative rights to
+      // be queried) we will not keep track of it
+      if (handle != NULL) {
+        TCHAR name[MAX_PATH] = {0};
+        DWORD name_length = GetModuleBaseName(handle, NULL, name, MAX_PATH);
+        if (name_length != 0) {
+          live_processes.emplace(pids[i], std::string(name, name_length));
+        }
+        CloseHandle(handle);
+      }
+    }
+  }
+
+  return LOG_END;
+}
+
 LOG_RETURN_TYPE ProcessMonitor::setProcessAffinity(uint32_t pid,
                                                    uint64_t affinity_mask) {
   LOG_BEGIN;
@@ -133,6 +178,7 @@ LOG_RETURN_TYPE ProcessMonitor::setProcessAffinity(uint32_t pid,
       PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_SET_INFORMATION,
       FALSE, pid);
   LOG_EC(handle == NULL ? LOG_NOK : LOG_OK, "OpenProcess()");
+
   if (IS_LOG_OK) {
     bool result;
     // Retrieve current process affinity mask
@@ -146,12 +192,9 @@ LOG_RETURN_TYPE ProcessMonitor::setProcessAffinity(uint32_t pid,
         LOG_EC(result ? LOG_OK : LOG_NOK, "SetProcessAffinityMask");
         if (IS_LOG_OK) {
           (void)SetPriorityClass(handle, HIGH_PRIORITY_CLASS);
-          LOG_INFO("Affinity of process with ID " + std::to_string(pid) +
-                   " set to " + std::to_string(affinity_mask));
+          LOG_INFO(live_processes.at(pid) + " (" + std::to_string(pid) +
+                   ") set to " + std::to_string(affinity_mask));
         }
-      } else {
-        LOG_INFO("Affinity of process with ID " + std::to_string(pid) +
-                 " already set to " + std::to_string(affinity_mask));
       }
     }
     (void)CloseHandle(handle);
@@ -272,7 +315,6 @@ void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
         if (IS_LOG_OK) {
           proc_id = value.uintVal;
           live_processes.emplace(proc_id, proc_name);
-          LOG_INFO(std::to_string(proc_id) + " " + proc_name);
         }
         value.Clear();
 
@@ -296,6 +338,7 @@ void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
 void ProcessMonitor::newProcessEnd(IWbemClassObject* data) {
   LOG_BEGIN;
 
+  // Get TargetInstance which is an object of type Win32_Process
   _variant_t target_instance_v;
   LOG_EC(data->Get(L"TargetInstance", 0, &target_instance_v, NULL, NULL),
          "Get TargetInstance");
@@ -312,7 +355,6 @@ void ProcessMonitor::newProcessEnd(IWbemClassObject* data) {
       if (IS_LOG_OK) {
         proc_id = value.uintVal;
         (void)live_processes.erase(proc_id);
-        LOG_INFO(std::to_string(proc_id));
       }
 
       value.Clear();

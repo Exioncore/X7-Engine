@@ -38,6 +38,7 @@ class ProcessMonitor {
   ~ProcessMonitor();
 
   // Methods
+  LOG_RETURN_TYPE getAllRunningProcesses();
   LOG_RETURN_TYPE setProcessAffinity(uint32_t pid, uint64_t affinity_mask);
 
   LOG_RETURN_TYPE loadProcAffinityMapFromDisk();
