@@ -30,32 +30,37 @@ void printSensorsTree(std::shared_ptr<MDI::SensorTree> tree, uint16_t depth) {
 
 void setAffinityToCCD0() {
   std::cout << "setAffinityToCCD0()" << std::endl;
-  PCC::ProcessMonitor::getInstance().setForegroundProcessAffinity(
-      0b1111111111111111);
+  PCC::ProcessMonitor::getInstance().setForegroundProcessModifiers(
+      PCC::ProcessAffinity{true, 0b1111111111111111}, PCC::HIGH);
 }
 
 void setAffinityToCCD0_SMTOff() {
   std::cout << "setAffinityToCCD0_SMTOff()" << std::endl;
-  PCC::ProcessMonitor::getInstance().setForegroundProcessAffinity(
-      0b0101010101010101);
+  PCC::ProcessMonitor::getInstance().setForegroundProcessModifiers(
+      PCC::ProcessAffinity{true, 0b0101010101010101}, PCC::HIGH);
 }
 
 void setAffinityToCCD1() {
   std::cout << "setAffinityToCCD1()" << std::endl;
-  PCC::ProcessMonitor::getInstance().setForegroundProcessAffinity(
-      (static_cast<uint64_t>(0b1111111111111111) << 16));
+  PCC::ProcessMonitor::getInstance().setForegroundProcessModifiers(
+      PCC::ProcessAffinity{true,
+                           (static_cast<uint64_t>(0b1111111111111111) << 16)},
+      PCC::HIGH);
 }
 
 void setAffinityToCCD1_SMTOff() {
   std::cout << "setAffinityToCCD1()_SMTOff()" << std::endl;
-  PCC::ProcessMonitor::getInstance().setForegroundProcessAffinity(
-      (static_cast<uint64_t>(0b0101010101010101) << 16));
+  PCC::ProcessMonitor::getInstance().setForegroundProcessModifiers(
+      PCC::ProcessAffinity{true,
+                           (static_cast<uint64_t>(0b0101010101010101) << 16)},
+      PCC::HIGH);
 }
 
 void resetAffinity() {
   std::cout << "resetAffinity()" << std::endl;
-  PCC::ProcessMonitor::getInstance().setForegroundProcessAffinity(
-      0b11111111111111111111111111111111);
+  PCC::ProcessMonitor::getInstance().setForegroundProcessModifiers(
+      PCC::ProcessAffinity{true, 0b11111111111111111111111111111111},
+      PCC::NORMAL);
 }
 
 void message_handler() {

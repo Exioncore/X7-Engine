@@ -33,8 +33,8 @@ ProcessMonitor& ProcessMonitor::getInstance() {
 LOG_RETURN_TYPE ProcessMonitor::initialize() {
   LOG_BEGIN;
 
-  // Register WMI callbacks
   if (!initialized) {
+    // Register WMI callbacks
     auto& wmi_watcher = WMW::WMIwatcher::getInstance();
     LOG_LR(wmi_watcher.initialize(), "WMI Initialization");
     if (IS_LOG_OK) {
@@ -67,8 +67,9 @@ LOG_RETURN_TYPE ProcessMonitor::initialize() {
     // Check if we already have any running processes who have a profile
     // associated
     for (auto& [pid, name] : live_processes) {
-      if (proc_affinity_map.count(name) == 1) {
-        (void)setProcessAffinity(pid, proc_affinity_map.at(name));
+      if (profiles.count(name) == 1) {
+        (void)setProcessModifiers(pid, profiles.at(name).affinity,
+                                  profiles.at(name).priority);
       }
     }
 
@@ -95,8 +96,8 @@ LOG_RETURN_TYPE ProcessMonitor::deInitialize() {
   return LOG_END;
 }
 
-LOG_RETURN_TYPE ProcessMonitor::setForegroundProcessAffinity(
-    uint64_t affinity_mask) {
+LOG_RETURN_TYPE ProcessMonitor::setForegroundProcessModifiers(
+    ProcessAffinity affinity, ProcessPriority priority) {
   LOG_BEGIN;
 
   HWND handle = GetForegroundWindow();
@@ -114,17 +115,17 @@ LOG_RETURN_TYPE ProcessMonitor::setForegroundProcessAffinity(
       if (IS_LOG_OK) {
         std::string proc_name = live_processes.at(pid);
         // Store Process profile
-        (void)proc_affinity_map.erase(proc_name);
-        proc_affinity_map.emplace(proc_name, affinity_mask);
+        (void)profiles.erase(proc_name);
+        profiles.emplace(proc_name, ProcessStorageEntry{affinity, priority});
         LOG_LR(saveProcAffinityMapToDisk(),
-               "Save Process Affinity map to disk");
-        // Set affinity for all processes with the same name
+               "Save Process Modifier map to disk");
+        // Set Modifiers for all processes with the same name
         if (IS_LOG_OK) {
           for (auto& [pid, pid_to_name] : live_processes) {
             if (pid_to_name == proc_name) {
-              // Set Process Affinity
-              LOG_LR(setProcessAffinity(pid, affinity_mask),
-                     "Set Process Affinity");
+              // Set Process Modifiers
+              LOG_LR(setProcessModifiers(pid, affinity, priority),
+                     "Set Process Modifiers");
             }
           }
         }
@@ -170,8 +171,9 @@ LOG_RETURN_TYPE ProcessMonitor::getAllRunningProcesses() {
   return LOG_END;
 }
 
-LOG_RETURN_TYPE ProcessMonitor::setProcessAffinity(uint32_t pid,
-                                                   uint64_t affinity_mask) {
+LOG_RETURN_TYPE ProcessMonitor::setProcessModifiers(uint32_t pid,
+                                                    ProcessAffinity affinity,
+                                                    ProcessPriority priority) {
   LOG_BEGIN;
 
   HANDLE handle = OpenProcess(
@@ -181,19 +183,43 @@ LOG_RETURN_TYPE ProcessMonitor::setProcessAffinity(uint32_t pid,
 
   if (IS_LOG_OK) {
     bool result;
-    // Retrieve current process affinity mask
-    uint64_t proc_affinity, system_affinity;
-    result = GetProcessAffinityMask(handle, &proc_affinity, &system_affinity);
-    LOG_EC(result ? LOG_OK : LOG_NOK, "GetProcessAffinityMask");
-    // Apply new affinity mask only if it does not already match what we want
-    if (IS_LOG_OK) {
-      if (proc_affinity != affinity_mask) {
-        result = SetProcessAffinityMask(handle, affinity_mask);
-        LOG_EC(result ? LOG_OK : LOG_NOK, "SetProcessAffinityMask");
+    // Set Affinity
+    if (affinity.modified) {
+      // Retrieve current process affinity mask
+      uint64_t curr_affinity, system_affinity;
+      result = GetProcessAffinityMask(handle, &curr_affinity, &system_affinity);
+      LOG_EC(result ? LOG_OK : GetLastError(), "GetProcessAffinityMask");
+      if (IS_LOG_OK) {
+        if (curr_affinity != affinity.mask) {
+          result = SetProcessAffinityMask(handle, affinity.mask);
+          LOG_EC(result ? LOG_OK : GetLastError(), "SetProcessAffinityMask");
+        }
         if (IS_LOG_OK) {
-          (void)SetPriorityClass(handle, HIGH_PRIORITY_CLASS);
           LOG_INFO(live_processes.at(pid) + " (" + std::to_string(pid) +
-                   ") set to " + std::to_string(affinity_mask));
+                   ") affinity set to " + std::to_string(affinity.mask));
+        }
+      }
+    }
+    // Set Priority
+    if ((IS_LOG_OK) && (priority != UNMODIFIED)) {
+      uint32_t curr_priority = GetPriorityClass(handle);
+      LOG_EC(curr_priority == 0 ? GetLastError() : LOG_OK, "GetPriorityClass");
+      if (IS_LOG_OK) {
+        if (curr_priority != static_cast<uint32_t>(priority)) {
+          result = SetPriorityClass(handle, static_cast<uint32_t>(priority));
+          LOG_EC(result ? LOG_OK : GetLastError(), "SetPriorityClass");
+        }
+        if (IS_LOG_OK) {
+          LOG_INFO(
+              live_processes.at(pid) + " (" + std::to_string(pid) +
+              ") priority set to " +
+              (priority == BELOW_NORMAL
+                   ? "BELOW_NORMAL"
+                   : (priority == NORMAL
+                          ? "NORMAL"
+                          : (priority == ABOVE_NORMAL
+                                 ? "ABOVE_NORMAL"
+                                 : (priority == HIGH ? "HIGH" : "REALTIME")))));
         }
       }
     }
@@ -223,10 +249,17 @@ LOG_RETURN_TYPE ProcessMonitor::loadProcAffinityMapFromDisk() {
     fclose(fp);
 
     // Read JSON file and populate proce_affinity_map
-    for (auto& entry : document["Programs"].GetArray()) {
-      std::string path = entry["path"].GetString();
-      uint64_t affinity = entry["affinity"].GetUint64();
-      proc_affinity_map.emplace(path, affinity);
+    for (auto& entry : document["programs"].GetArray()) {
+      std::string path = entry["name"].GetString();
+      ProcessAffinity affinity{false, 0};
+      if (entry.HasMember("affinity")) {
+        affinity.mask = entry["affinity"].GetUint64();
+      }
+      ProcessPriority priority = UNMODIFIED;
+      if (entry.HasMember("priority")) {
+        priority = static_cast<ProcessPriority>(entry["priority"].GetUint());
+      }
+      profiles.emplace(path, ProcessStorageEntry{affinity, priority});
     }
   }
 
@@ -244,19 +277,24 @@ LOG_RETURN_TYPE ProcessMonitor::saveProcAffinityMapToDisk() {
   Value array(rapidjson::kArrayType);
 
   Document::AllocatorType& allocator = document.GetAllocator();
-  for (auto& [path, affinity] : proc_affinity_map) {
+  for (auto& [name, modifiers] : profiles) {
     Value value(rapidjson::kObjectType);
     {
       {
-        Value path_txt;
-        path_txt.SetString(path.c_str(), allocator);
-        value.AddMember("path", path_txt, allocator);
+        Value name_txt;
+        name_txt.SetString(name.c_str(), allocator);
+        value.AddMember("name", name_txt, allocator);
       }
-      value.AddMember("affinity", affinity, allocator);
+      if (modifiers.affinity.modified) {
+        value.AddMember("affinity", modifiers.affinity.mask, allocator);
+      }
+      if (modifiers.priority != UNMODIFIED) {
+        value.AddMember("priority", modifiers.priority, allocator);
+      }
     }
     array.PushBack(value, allocator);
   }
-  document.AddMember("Programs", array, allocator);
+  document.AddMember("programs", array, allocator);
 
   // Write JSON file to disk
   std::string path = std::filesystem::current_path()
@@ -320,8 +358,9 @@ void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
 
         // Apply affinity mask if there is a profile for the given process
         if (IS_LOG_OK) {
-          if (proc_affinity_map.count(proc_name) == 1) {
-            setProcessAffinity(proc_id, proc_affinity_map.at(proc_name));
+          if (profiles.count(proc_name) == 1) {
+            setProcessModifiers(proc_id, profiles.at(proc_name).affinity,
+                                profiles.at(proc_name).priority);
           }
         }
       }

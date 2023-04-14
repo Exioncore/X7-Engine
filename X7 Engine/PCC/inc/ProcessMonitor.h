@@ -12,7 +12,27 @@
 #include "WMIwatcher.h"
 
 namespace PCC {
+struct ProcessAffinity {
+  bool modified;
+  uint64_t mask;
+};
+
+enum ProcessPriority {
+  UNMODIFIED = 0,
+  BELOW_NORMAL = BELOW_NORMAL_PRIORITY_CLASS,
+  NORMAL = NORMAL_PRIORITY_CLASS,
+  ABOVE_NORMAL = ABOVE_NORMAL_PRIORITY_CLASS,
+  HIGH = HIGH_PRIORITY_CLASS,
+  REALTIME = REALTIME_PRIORITY_CLASS
+};
+
 class ProcessMonitor {
+ private:
+  struct ProcessStorageEntry {
+    ProcessAffinity affinity;
+    ProcessPriority priority;
+  };
+
  public:
   ProcessMonitor(const ProcessMonitor&) = delete;
   ProcessMonitor& operator=(const ProcessMonitor&) = delete;
@@ -20,7 +40,8 @@ class ProcessMonitor {
   // Methods
   LOG_RETURN_TYPE initialize();
   LOG_RETURN_TYPE deInitialize();
-  LOG_RETURN_TYPE setForegroundProcessAffinity(uint64_t affinity_mask);
+  LOG_RETURN_TYPE setForegroundProcessModifiers(ProcessAffinity affinity,
+                                                ProcessPriority priority);
 
   static ProcessMonitor& getInstance();
 
@@ -32,14 +53,15 @@ class ProcessMonitor {
   uint16_t new_process_begin_callback_id, new_process_end_callback_id;
 
   std::mutex mtx;
-  std::unordered_map<std::string, uint64_t> proc_affinity_map;
+  std::unordered_map<std::string, ProcessStorageEntry> profiles;
 
   ProcessMonitor();
   ~ProcessMonitor();
 
   // Methods
   LOG_RETURN_TYPE getAllRunningProcesses();
-  LOG_RETURN_TYPE setProcessAffinity(uint32_t pid, uint64_t affinity_mask);
+  LOG_RETURN_TYPE setProcessModifiers(uint32_t pid, ProcessAffinity affinity,
+                                      ProcessPriority priority);
 
   LOG_RETURN_TYPE loadProcAffinityMapFromDisk();
   LOG_RETURN_TYPE saveProcAffinityMapToDisk();
