@@ -102,7 +102,7 @@ int main() {
 
   while (true) {
     gdm.update();
-    // printSensorsTree(root, 0);
+    printSensorsTree(root, 0);
     _sleep(1000);
   }
   t_msg_handler.join();

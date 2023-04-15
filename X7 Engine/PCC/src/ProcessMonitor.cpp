@@ -153,8 +153,8 @@ LOG_RETURN_TYPE ProcessMonitor::getAllRunningProcesses() {
     // Retrieve name of each process pid
     processes_count /= sizeof(DWORD);
     for (uint16_t i = 0; i < processes_count; i++) {
-      HANDLE handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
-                                  FALSE, pids[i]);
+      HANDLE handle = OpenProcess(
+          PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, FALSE, pids[i]);
       // If the handle is NULL (Process that requires administrative rights to
       // be queried) we will not keep track of it
       if (handle != NULL) {
@@ -177,7 +177,7 @@ LOG_RETURN_TYPE ProcessMonitor::setProcessModifiers(uint32_t pid,
   LOG_BEGIN;
 
   HANDLE handle = OpenProcess(
-      PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_SET_INFORMATION,
+      PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ | PROCESS_SET_INFORMATION,
       FALSE, pid);
   LOG_EC(handle == NULL ? LOG_NOK : LOG_OK, "OpenProcess()");
 
@@ -193,10 +193,10 @@ LOG_RETURN_TYPE ProcessMonitor::setProcessModifiers(uint32_t pid,
         if (curr_affinity != affinity.mask) {
           result = SetProcessAffinityMask(handle, affinity.mask);
           LOG_EC(result ? LOG_OK : GetLastError(), "SetProcessAffinityMask");
-        }
-        if (IS_LOG_OK) {
-          LOG_INFO(live_processes.at(pid) + " (" + std::to_string(pid) +
-                   ") affinity set to " + std::to_string(affinity.mask));
+          if (IS_LOG_OK) {
+            LOG_INFO(live_processes.at(pid) + " (" + std::to_string(pid) +
+                     ") affinity set to " + std::to_string(affinity.mask));
+          }
         }
       }
     }
@@ -208,18 +208,18 @@ LOG_RETURN_TYPE ProcessMonitor::setProcessModifiers(uint32_t pid,
         if (curr_priority != static_cast<uint32_t>(priority)) {
           result = SetPriorityClass(handle, static_cast<uint32_t>(priority));
           LOG_EC(result ? LOG_OK : GetLastError(), "SetPriorityClass");
-        }
-        if (IS_LOG_OK) {
-          LOG_INFO(
-              live_processes.at(pid) + " (" + std::to_string(pid) +
-              ") priority set to " +
-              (priority == BELOW_NORMAL
-                   ? "BELOW_NORMAL"
-                   : (priority == NORMAL
-                          ? "NORMAL"
-                          : (priority == ABOVE_NORMAL
-                                 ? "ABOVE_NORMAL"
-                                 : (priority == HIGH ? "HIGH" : "REALTIME")))));
+          if (IS_LOG_OK) {
+            LOG_INFO(live_processes.at(pid) + " (" + std::to_string(pid) +
+                     ") priority set to " +
+                     (priority == BELOW_NORMAL
+                          ? "BELOW_NORMAL"
+                          : (priority == NORMAL
+                                 ? "NORMAL"
+                                 : (priority == ABOVE_NORMAL
+                                        ? "ABOVE_NORMAL"
+                                        : (priority == HIGH ? "HIGH"
+                                                            : "REALTIME")))));
+          }
         }
       }
     }
@@ -253,6 +253,7 @@ LOG_RETURN_TYPE ProcessMonitor::loadProcAffinityMapFromDisk() {
       std::string path = entry["name"].GetString();
       ProcessAffinity affinity{false, 0};
       if (entry.HasMember("affinity")) {
+        affinity.modified = true;
         affinity.mask = entry["affinity"].GetUint64();
       }
       ProcessPriority priority = UNMODIFIED;
