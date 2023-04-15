@@ -1,4 +1,4 @@
-project("X7 Engine")
+project ("X7 Engine")
 
 include(ExternalProject)
 include(FetchContent)

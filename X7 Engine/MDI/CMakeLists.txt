@@ -1,5 +1,6 @@
-project("X7 Engine")
+project ("X7 Engine")
 
+# MDI
 add_library(MDI
     "inc/Monitor.h"
     "inc/SensorTree.h"

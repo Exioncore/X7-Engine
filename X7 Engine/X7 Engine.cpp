@@ -9,6 +9,7 @@
 #include "COMmanager.h"
 #include "GDM.h"
 #include "HotkeyManager.h"
+#include "KernelAccess.h"
 #include "ProcessMonitor.h"
 
 using namespace std;
@@ -93,6 +94,8 @@ void message_handler() {
 }
 
 int main() {
+  KAW::KernelAccess::initialize();
+
   std::thread t_msg_handler(message_handler);
 
   std::shared_ptr<MDI::SensorTree> root =
