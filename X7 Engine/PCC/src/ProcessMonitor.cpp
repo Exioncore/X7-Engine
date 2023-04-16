@@ -109,11 +109,14 @@ LOG_RETURN_TYPE ProcessMonitor::setForegroundProcessModifiers(
            "GetWindowThreadProcessId()");
     if (IS_LOG_OK) {
       // Check if we have a record of this process id
+      mtx.lock();
+      std::string proc_name;
       LOG_EC(live_processes.count(pid) == 1 ? LOG_OK : LOG_NOK,
              "Check if process is tracked");
+      if (IS_LOG_OK) proc_name = live_processes.at(pid);
+      mtx.unlock();
       // Get Process Name
       if (IS_LOG_OK) {
-        std::string proc_name = live_processes.at(pid);
         // Store Process profile
         (void)profiles.erase(proc_name);
         profiles.emplace(proc_name, ProcessStorageEntry{affinity, priority});
@@ -121,7 +124,7 @@ LOG_RETURN_TYPE ProcessMonitor::setForegroundProcessModifiers(
                "Save Process Modifier map to disk");
         // Set Modifiers for all processes with the same name
         if (IS_LOG_OK) {
-          for (auto& [pid, pid_to_name] : live_processes) {
+          for (auto [pid, pid_to_name] : live_processes) {
             if (pid_to_name == proc_name) {
               // Set Process Modifiers
               LOG_LR(setProcessModifiers(pid, affinity, priority),
@@ -149,6 +152,7 @@ LOG_RETURN_TYPE ProcessMonitor::getAllRunningProcesses() {
   // that requires administrative rights to be "queried" for its name
   if (IS_LOG_OK) {
     // Clear out current list of running processes
+    mtx.lock();
     live_processes.clear();
     // Retrieve name of each process pid
     processes_count /= sizeof(DWORD);
@@ -161,11 +165,12 @@ LOG_RETURN_TYPE ProcessMonitor::getAllRunningProcesses() {
         TCHAR name[MAX_PATH] = {0};
         DWORD name_length = GetModuleBaseName(handle, NULL, name, MAX_PATH);
         if (name_length != 0) {
-          live_processes.emplace(pids[i], std::string(name, name_length));
+          (void)live_processes.emplace(pids[i], std::string(name, name_length));
         }
         CloseHandle(handle);
       }
     }
+    mtx.unlock();
   }
 
   return LOG_END;
@@ -176,13 +181,17 @@ LOG_RETURN_TYPE ProcessMonitor::setProcessModifiers(uint32_t pid,
                                                     ProcessPriority priority) {
   LOG_BEGIN;
 
-  HANDLE handle = OpenProcess(
-      PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ | PROCESS_SET_INFORMATION,
-      FALSE, pid);
+  HANDLE handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION |
+                                  PROCESS_VM_READ | PROCESS_SET_INFORMATION,
+                              FALSE, pid);
   LOG_EC(handle == NULL ? LOG_NOK : LOG_OK, "OpenProcess()");
 
   if (IS_LOG_OK) {
     bool result;
+    // Get process name
+    mtx.lock();
+    std::string proc_name = live_processes.at(pid);
+    mtx.unlock();
     // Set Affinity
     if (affinity.modified) {
       // Retrieve current process affinity mask
@@ -194,7 +203,7 @@ LOG_RETURN_TYPE ProcessMonitor::setProcessModifiers(uint32_t pid,
           result = SetProcessAffinityMask(handle, affinity.mask);
           LOG_EC(result ? LOG_OK : GetLastError(), "SetProcessAffinityMask");
           if (IS_LOG_OK) {
-            LOG_INFO(live_processes.at(pid) + " (" + std::to_string(pid) +
+            LOG_INFO(proc_name + " (" + std::to_string(pid) +
                      ") affinity set to " + std::to_string(affinity.mask));
           }
         }
@@ -209,7 +218,7 @@ LOG_RETURN_TYPE ProcessMonitor::setProcessModifiers(uint32_t pid,
           result = SetPriorityClass(handle, static_cast<uint32_t>(priority));
           LOG_EC(result ? LOG_OK : GetLastError(), "SetPriorityClass");
           if (IS_LOG_OK) {
-            LOG_INFO(live_processes.at(pid) + " (" + std::to_string(pid) +
+            LOG_INFO(proc_name + " (" + std::to_string(pid) +
                      ") priority set to " +
                      (priority == BELOW_NORMAL
                           ? "BELOW_NORMAL"
@@ -353,7 +362,9 @@ void ProcessMonitor::newProcessBegin(IWbemClassObject* data) {
                "Get Process ID");
         if (IS_LOG_OK) {
           proc_id = value.uintVal;
-          live_processes.emplace(proc_id, proc_name);
+          mtx.lock();
+          (void)live_processes.emplace(proc_id, proc_name);
+          mtx.unlock();
         }
         value.Clear();
 
@@ -394,7 +405,9 @@ void ProcessMonitor::newProcessEnd(IWbemClassObject* data) {
       LOG_EC(data->Get(L"ProcessId", 0, &value, NULL, NULL), "Get Process ID");
       if (IS_LOG_OK) {
         proc_id = value.uintVal;
+        mtx.lock();
         (void)live_processes.erase(proc_id);
+        mtx.unlock();
       }
 
       value.Clear();
