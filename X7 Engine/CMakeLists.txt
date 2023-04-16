@@ -7,6 +7,7 @@ add_executable (X7Engine "X7 Engine.cpp" "X7 Engine.h")
 find_library(USER32 user32)
 target_link_libraries(X7Engine
     PRIVATE
+    CDM
     GDM
     MDI
     PCC
@@ -21,6 +22,7 @@ if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET X7Engine PROPERTY CXX_STANDARD 20)
 endif()
 
+add_subdirectory(CDM)
 add_subdirectory(GDM)
 add_subdirectory(KAW)
 add_subdirectory(MDI)

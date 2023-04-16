@@ -51,31 +51,42 @@ void KernelAccess::deInitialize() {
   }
 }
 
-bool KernelAccess::supportCpuId() { return IsCpuid(); }
-
-bool KernelAccess::supportMsr() { return IsMsr(); }
-
-bool KernelAccess::cpuId(uint32_t index, uint32_t* eax, uint32_t* ebx,
-                         uint32_t* ecx, uint32_t* edx) {
-  return Cpuid(index, (PDWORD)eax, (PDWORD)ebx, (PDWORD)ecx, (PDWORD)edx);
+LOG_ERROR_TYPE KernelAccess::supportCpuId() {
+  return IsCpuid() ? LOG_OK : LOG_NOK;
 }
 
-bool KernelAccess::readMsr(uint32_t index, uint32_t* eax, uint32_t* edx) {
-  return Rdmsr(index, (PDWORD)eax, (PDWORD)edx);
+LOG_ERROR_TYPE KernelAccess::supportMsr() { return IsMsr() ? LOG_OK : LOG_NOK; }
+
+LOG_ERROR_TYPE KernelAccess::cpuId(uint32_t index, uint32_t* eax, uint32_t* ebx,
+                                   uint32_t* ecx, uint32_t* edx) {
+  return Cpuid(index, (PDWORD)eax, (PDWORD)ebx, (PDWORD)ecx, (PDWORD)edx)
+             ? LOG_OK
+             : LOG_NOK;
 }
 
-bool KernelAccess::readMsr(uint32_t index, uint32_t* eax, uint32_t* edx,
-                           uint64_t cpu_mask) {
-  return RdmsrPx(index, (PDWORD)eax, (PDWORD)edx, (DWORD_PTR)cpu_mask);
+LOG_ERROR_TYPE KernelAccess::readMsr(uint32_t index, uint32_t* eax,
+                                     uint32_t* edx) {
+  return Rdmsr(index, (PDWORD)eax, (PDWORD)edx) ? LOG_OK : LOG_NOK;
 }
 
-bool KernelAccess::writePciRegister(uint32_t pci_addr, uint32_t register_addr,
-                                    uint32_t value) {
-  return WritePciConfigDwordEx(pci_addr, register_addr, (DWORD)value);
+LOG_ERROR_TYPE KernelAccess::readMsr(uint32_t index, uint32_t* eax,
+                                     uint32_t* edx, uint64_t cpu_mask) {
+  return RdmsrPx(index, (PDWORD)eax, (PDWORD)edx, (DWORD_PTR)cpu_mask)
+             ? LOG_OK
+             : LOG_NOK;
 }
 
-bool KernelAccess::readPciRegister(uint32_t pci_addr, uint32_t register_addr,
-                                   uint32_t* value) {
-  return ReadPciConfigDwordEx(pci_addr, register_addr, (PDWORD)value);
+LOG_ERROR_TYPE KernelAccess::writePciRegister(uint32_t pci_addr,
+                                              uint32_t register_addr,
+                                              uint32_t value) {
+  return WritePciConfigDwordEx(pci_addr, register_addr, (DWORD)value) ? LOG_OK
+                                                                      : LOG_NOK;
+}
+
+LOG_ERROR_TYPE KernelAccess::readPciRegister(uint32_t pci_addr,
+                                             uint32_t register_addr,
+                                             uint32_t* value) {
+  return ReadPciConfigDwordEx(pci_addr, register_addr, (PDWORD)value) ? LOG_OK
+                                                                      : LOG_NOK;
 }
 }  // namespace KAW

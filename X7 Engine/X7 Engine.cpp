@@ -6,6 +6,7 @@
 #include <windows.h>
 // Interal Module Includes
 // External Module Includes
+#include "CDM.h"
 #include "COMmanager.h"
 #include "GDM.h"
 #include "HotkeyManager.h"
@@ -100,10 +101,13 @@ int main() {
 
   std::shared_ptr<MDI::SensorTree> root =
       std::make_shared<MDI::SensorTree>("X7 Engine");
+  CDM::CDM cdm(root);
+  cdm.initialize();
   GDM::GDM gdm(root);
   gdm.initialize();
 
   while (true) {
+    cdm.update();
     gdm.update();
     printSensorsTree(root, 0);
     _sleep(1000);

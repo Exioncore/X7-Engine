@@ -26,17 +26,19 @@ class KernelAccess {
 
   static LOG_RETURN_TYPE initialize();
   static void deInitialize();
-  static bool supportCpuId();
-  static bool supportMsr();
-  static bool cpuId(uint32_t index, uint32_t* eax, uint32_t* ebx, uint32_t* ecx,
-                    uint32_t* edx);
-  static bool readMsr(uint32_t index, uint32_t* eax, uint32_t* edx);
-  static bool readMsr(uint32_t index, uint32_t* eax, uint32_t* edx,
-                      uint64_t cpu_mask);
-  static bool writePciRegister(uint32_t pci_addr, uint32_t register_addr,
-                               uint32_t value);
-  static bool readPciRegister(uint32_t pci_addr, uint32_t register_addr,
-                              uint32_t* value);
+  static LOG_ERROR_TYPE supportCpuId();
+  static LOG_ERROR_TYPE supportMsr();
+  static LOG_ERROR_TYPE cpuId(uint32_t index, uint32_t* eax, uint32_t* ebx,
+                              uint32_t* ecx, uint32_t* edx);
+  static LOG_ERROR_TYPE readMsr(uint32_t index, uint32_t* eax, uint32_t* edx);
+  static LOG_ERROR_TYPE readMsr(uint32_t index, uint32_t* eax, uint32_t* edx,
+                                uint64_t cpu_mask);
+  static LOG_ERROR_TYPE writePciRegister(uint32_t pci_addr,
+                                         uint32_t register_addr,
+                                         uint32_t value);
+  static LOG_ERROR_TYPE readPciRegister(uint32_t pci_addr,
+                                        uint32_t register_addr,
+                                        uint32_t* value);
 
  private:
   LOGGER("KernelAccess", true, true);
