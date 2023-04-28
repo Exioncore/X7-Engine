@@ -17,5 +17,4 @@ target_link_libraries(CDM
     MDI
     KAW
     TRL
-    ${PDH_LIB}
 )

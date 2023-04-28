@@ -44,7 +44,7 @@ LOG_RETURN_TYPE CDM::initialize() {
       uint8_t r_efamily = ((eax & 0xF00000) >> 20);
       uint8_t r_model = ((eax & 0x0000F0) >> 4);
       uint8_t r_emodel = ((eax & 0x0F0000) >> 16);
-      family = CPU::parseFamily(r_family, r_efamily, r_model, r_emodel);
+      family = CPU::parseFamily(vendor, r_family, r_efamily, r_model, r_emodel);
     }
     // Retrieve CPU name
     if (IS_LOG_OK) {

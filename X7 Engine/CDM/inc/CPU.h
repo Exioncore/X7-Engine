@@ -14,8 +14,8 @@ class CPU {
   enum FAMILY { AMD_ZEN4, AMD_ZEN3, FAMILY_UNKNOWN };
 
   static VENDOR parseVendor(uint32_t ebx, uint32_t edx, uint32_t ecx);
-  static FAMILY parseFamily(uint8_t family, uint8_t e_family, uint8_t model,
-                            uint8_t e_model);
+  static FAMILY parseFamily(CPU::VENDOR vendor, uint8_t family,
+                            uint8_t e_family, uint8_t model, uint8_t e_model);
 
   virtual LOG_RETURN_TYPE initialize(
       std::shared_ptr<MDI::SensorTree> sensor_tree, FAMILY family,

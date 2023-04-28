@@ -20,11 +20,14 @@ CPU::VENDOR CPU::parseVendor(uint32_t ebx, uint32_t edx, uint32_t ecx) {
   }
 }
 
-CPU::FAMILY CPU::parseFamily(uint8_t family, uint8_t e_family, uint8_t model,
-                             uint8_t e_model) {
-  if (family == 0xF && e_family == 0xA && model == 0x1 && e_model == 0x6)
-    return AMD_ZEN4;
-  else
+CPU::FAMILY CPU::parseFamily(CPU::VENDOR vendor, uint8_t family,
+                             uint8_t e_family, uint8_t model, uint8_t e_model) {
+  if (vendor == AMD) {
+    if (family == 0xF && e_family == 0xA && model == 0x1 && e_model == 0x6)
+      return AMD_ZEN4;
+    else
+      return FAMILY_UNKNOWN;
+  } else
     return FAMILY_UNKNOWN;
 }
 

@@ -8,9 +8,11 @@
 // External Module Includes
 #include "CDM.h"
 #include "COMmanager.h"
+#include "DSM.h"
 #include "GDM.h"
 #include "HotkeyManager.h"
 #include "KernelAccess.h"
+#include "NSM.h"
 #include "ProcessMonitor.h"
 
 using namespace std;
@@ -105,10 +107,19 @@ int main() {
   cdm.initialize();
   GDM::GDM gdm(root);
   gdm.initialize();
+  NSM::NSM nsm(root);
+  nsm.initialize();
+  DSM::DSM dsm(root);
+  dsm.initialize();
+
+  // Minimize RAM Usage
+  (void)_heapmin();
 
   while (true) {
     cdm.update();
     gdm.update();
+    nsm.update();
+    dsm.update();
     printSensorsTree(root, 0);
     _sleep(1000);
   }

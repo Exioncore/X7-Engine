@@ -6,7 +6,11 @@ add_library(WMW
 	"src/WMIwatcher.cpp"
 	"inc/COMmanager.h" 
 	"src/COMmanager.cpp"
- "inc/EventSink.h" "src/EventSink.cpp")
+	"inc/EventSink.h" 
+	"src/EventSink.cpp"
+	"inc/PDHhelper.h"
+	"src/PDHhelper.cpp"
+)
 target_include_directories(WMW
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/inc/
