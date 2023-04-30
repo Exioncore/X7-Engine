@@ -20,7 +20,7 @@ class CDM : public MDI::Monitor {
   LOG_RETURN_TYPE update() override;
 
  private:
-  LOGGER("CDM", true, true);
+  LOGGER("CDM");
 
   // CPU
   std::unique_ptr<CPU> cpu;

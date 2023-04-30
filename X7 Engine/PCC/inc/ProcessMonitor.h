@@ -46,7 +46,7 @@ class ProcessMonitor {
   static ProcessMonitor& getInstance();
 
  private:
-  LOGGER("ProcessMonitor", true, true);
+  LOGGER("ProcessMonitor");
 
   bool initialized;
   std::unordered_map<uint32_t, std::string> live_processes;

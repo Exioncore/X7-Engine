@@ -15,7 +15,7 @@ class AMD_ZEN : public CPU {
   LOG_RETURN_TYPE update(std::vector<uint8_t>& core_usage) override;
 
  private:
-  LOGGER("AMD_ZEN", true, true);
+  LOGGER("AMD_ZEN");
 
   // Processor layout information
   uint16_t logical_cores, physical_cores;

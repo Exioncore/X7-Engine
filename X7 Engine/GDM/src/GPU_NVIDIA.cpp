@@ -38,7 +38,8 @@ LOG_RETURN_TYPE GPU_NVIDIA::initialize() {
                "Get NVML Device handle");
         if (IS_LOG_OK) {
           GPUHandle gpu(nvapi_gpu_handle[i], nvml_handle);
-          LOG_LR(initializeGPUHandle(gpu, i), "Initialize GPU Handle");
+          LOG_LR(initializeGPUHandle(gpu, i),
+                 "Initialize GPU Handle " + std::to_string(i));
           if (IS_LOG_OK) {
             gpus.push_back(gpu);
             parent_sensor_tree->addSensorTree(gpu.root_sensor_tree);

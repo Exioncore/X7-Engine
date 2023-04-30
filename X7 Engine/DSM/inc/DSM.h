@@ -19,7 +19,7 @@ class DSM : public MDI::Monitor {
   LOG_RETURN_TYPE update() override;
 
  private:
-  LOGGER("DSM", true, true);
+  LOGGER("DSM");
 
   std::shared_ptr<MDI::SensorTree> root_devices_tree;
   // Networks

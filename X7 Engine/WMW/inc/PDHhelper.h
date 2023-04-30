@@ -16,7 +16,7 @@ class PDHhelper {
       std::string category, std::vector<std::string>& instances);
 
  private:
-  LOGGER("PDHhelper", true, true);
+  LOGGER("PDHhelper");
 };
 
 }  // namespace WMW

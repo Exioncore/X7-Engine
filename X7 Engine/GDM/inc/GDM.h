@@ -17,7 +17,7 @@ class GDM : public MDI::Monitor {
   LOG_RETURN_TYPE update() override;
 
  private:
-  LOGGER("GDM", true, true);
+  LOGGER("GDM");
 
   std::shared_ptr<MDI::SensorTree> root_devices_tree;
   std::shared_ptr<MDI::Monitor> amd_devices;

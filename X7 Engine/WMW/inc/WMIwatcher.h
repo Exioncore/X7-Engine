@@ -27,7 +27,7 @@ class WMIwatcher {
   static WMIwatcher& getInstance();
 
  private:
-  LOGGER("WMIwatcher", true, true);
+  LOGGER("WMIwatcher");
 
   bool initialized;
   uint16_t id;

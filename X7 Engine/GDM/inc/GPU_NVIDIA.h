@@ -40,7 +40,7 @@ class GPU_NVIDIA : public MDI::Monitor {
   LOG_RETURN_TYPE update() override;
 
  private:
-  LOGGER("GPU_NVIDIA", true, true);
+  LOGGER("GPU_NVIDIA");
 
   // Methods
   LOG_RETURN_TYPE initializeGPUHandle(GPUHandle& gpu, uint16_t index);

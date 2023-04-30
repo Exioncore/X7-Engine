@@ -27,7 +27,7 @@ class GPU_AMD : public MDI::Monitor {
   LOG_RETURN_TYPE update() override;
 
  private:
-  LOGGER("GPU_AMD", true, true);
+  LOGGER("GPU_AMD");
 
   // Methods
   LOG_RETURN_TYPE initializeGPUlist();

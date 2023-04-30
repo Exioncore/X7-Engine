@@ -20,7 +20,7 @@ class HotkeyManager {
   void handleHotkeys(int hotkey_id);
 
  private:
-  LOGGER("HotkeyManager", true, true);
+  LOGGER("HotkeyManager");
 
   int id;
   std::unordered_map<uint32_t, std::function<void(void)>> macro_id_to_hotkey;

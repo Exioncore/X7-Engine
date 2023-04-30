@@ -12,8 +12,6 @@ class Logger {
   static constexpr int32_t NO_LINK = 0;
   static constexpr int32_t OK = 0;
 
-  Logger(std::string module_name, bool logging_enabled, bool log_on_error_only);
-  Logger(std::string module_name, bool logging_enabled);
   Logger(std::string module_name);
 
   // Methods
@@ -31,8 +29,6 @@ class Logger {
   static std::mutex mtx;
 
   std::string module_name;
-  bool logging_enabled;
-  bool log_on_error_only;
 };
 
 }  // namespace TRL

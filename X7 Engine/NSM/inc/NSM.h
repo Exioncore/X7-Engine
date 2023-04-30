@@ -19,7 +19,7 @@ class NSM : public MDI::Monitor {
   LOG_RETURN_TYPE update() override;
 
  private:
-  LOGGER("NSM", true, true);
+  LOGGER("NSM");
 
   std::shared_ptr<MDI::SensorTree> root_devices_tree;
   // Networks

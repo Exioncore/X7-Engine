@@ -41,7 +41,7 @@ class KernelAccess {
                                         uint32_t* value);
 
  private:
-  LOGGER("KernelAccess", true, true);
+  LOGGER("KernelAccess");
 
   inline static bool is_initialized = false;
 };

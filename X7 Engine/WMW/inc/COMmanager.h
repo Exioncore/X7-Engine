@@ -16,7 +16,7 @@ namespace WMW {
 		LOG_RETURN_TYPE deInitialize();
 
 	private:
-		LOGGER("COMmanager", true, true);
+		LOGGER("COMmanager");
 
 		bool initialized;
 

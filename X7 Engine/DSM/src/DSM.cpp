@@ -123,10 +123,8 @@ std::string DSM::strConverter(double value, std::string unit) {
   }
   ss << std::fixed;
   if (value < 10) {
-    ss << std::setprecision(3);
-  } else if (value < 100) {
     ss << std::setprecision(2);
-  } else if (value < 1000) {
+  } else if (value < 100) {
     ss << std::setprecision(1);
   } else {
     ss << std::setprecision(0);
